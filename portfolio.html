@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Yaswanth Somala — Senior Software Engineer & Module Lead</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Supabase Client Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -12,6 +15,7 @@
       rel="stylesheet"
     />
     <style>
+      /* Your existing CSS remains exactly the same */
       :root {
         --bg-primary: #faf8f5;
         --bg-secondary: #f5f2ee;
@@ -915,28 +919,17 @@
         color: var(--fg-primary);
       }
 
-      .delete-btn {
-        position: absolute;
-        top: 1rem;
-        right: 1rem;
-        background: none;
-        border: none;
-        color: var(--fg-muted);
-        cursor: pointer;
-        opacity: 0;
-        transition:
-          opacity 0.3s,
-          color 0.3s;
-        padding: 4px;
+      .submit-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
 
-      .testimonial-card:hover .delete-btn {
-        opacity: 0.6;
-      }
-
-      .delete-btn:hover {
-        opacity: 1;
-        color: #c0392b;
+      .form-success-message {
+        text-align: center;
+        color: #2e7d32;
+        font-family: "Outfit", sans-serif;
+        margin-top: 1rem;
+        display: none;
       }
 
       /* Contact Section */
@@ -1657,7 +1650,10 @@
       <h2 class="section-title">Kind Words</h2>
 
       <div class="testimonials-grid" id="testimonialsGrid">
-        <!-- Testimonials injected by JS -->
+        <!-- Testimonials loaded by JS from Supabase -->
+        <p style="color: var(--fg-muted); text-align: center; width: 100%">
+          Loading testimonials...
+        </p>
       </div>
 
       <!-- Form to add testimonial -->
@@ -1695,7 +1691,7 @@
               rows="3"
             ></textarea>
           </div>
-          <button type="submit" class="submit-btn">
+          <button type="submit" class="submit-btn" id="submitBtn">
             Submit Testimonial
             <svg
               width="16"
@@ -1709,6 +1705,10 @@
               <path d="M5 12h14M12 5l7 7-7 7" />
             </svg>
           </button>
+          <p class="form-success-message" id="successMsg">
+            Thank you! Your testimonial has been submitted and is awaiting
+            review.
+          </p>
         </form>
       </div>
     </section>
@@ -1751,6 +1751,18 @@
     </footer>
 
     <script>
+      // --- CONFIG ---
+      // REPLACE THESE WITH YOUR ACTUAL SUPABASE DETAILS
+      const SUPABASE_URL = "https://iyzyuccsgloloirewuqz.supabase.co";
+      const SUPABASE_ANON_KEY =
+        "sb_publishable_Y5RtJ6RlmAuEHg2GLDailA_mMqS1K-m";
+
+      // Initialize Supabase Client
+      const supabaseClient = window.supabase.createClient(
+        SUPABASE_URL,
+        SUPABASE_ANON_KEY,
+      );
+
       // Initialize dust particles
       const dustCanvas = document.getElementById("dustCanvas");
       const ctx = dustCanvas.getContext("2d");
@@ -1886,7 +1898,7 @@
         });
       });
 
-      // Initialize
+      // Initialize Canvas
       resizeCanvas();
       createDustParticles();
       animateDust();
@@ -1905,75 +1917,55 @@
         }
       });
 
-      // --- Testimonials Logic ---
-
-      const defaultTestimonials = [
-        {
-          id: "default-1",
-          name: "Sarah Jenkins",
-          role: "Product Manager",
-          message:
-            "Yaswanth has an incredible eye for detail. He transformed our complex requirements into a seamless, intuitive interface. His code is clean and his work ethic is unmatched.",
-          isDefault: true,
-        },
-        {
-          id: "default-2",
-          name: "Michael Chen",
-          role: "CTO, TechStart",
-          message:
-            "Working with Yaswanth was a pleasure. He not only delivered excellent frontend architecture but also improved our entire deployment pipeline. A true full-stack asset.",
-          isDefault: true,
-        },
-        {
-          id: "default-3",
-          name: "Priya Patel",
-          role: "Senior Designer",
-          message:
-            "The collaboration between design and development was seamless thanks to Yaswanth. He respects the design vision while suggesting practical improvements that enhanced the final product.",
-          isDefault: true,
-        },
-      ];
+      // --- TESTIMONIALS DB LOGIC ---
 
       const testimonialForm = document.getElementById("testimonialForm");
       const testimonialGrid = document.getElementById("testimonialsGrid");
+      const submitBtn = document.getElementById("submitBtn");
+      const successMsg = document.getElementById("successMsg");
 
-      // Initialize testimonials from LocalStorage or Defaults
-      function initTestimonials() {
-        const storedTestimonials = localStorage.getItem("ys_testimonials");
-        let testimonials = [];
+      // 1. Fetch Testimonials from Supabase
+      async function loadTestimonials() {
+        try {
+          const { data, error } = await supabaseClient
+            .from("testimonials")
+            .select("*")
+            .eq("is_approved", true) // Only show approved
+            .order("created_at", { ascending: false });
 
-        if (storedTestimonials) {
-          testimonials = JSON.parse(storedTestimonials);
-        } else {
-          testimonials = defaultTestimonials;
-          localStorage.setItem("ys_testimonials", JSON.stringify(testimonials));
+          if (error) throw error;
+
+          renderTestimonials(data);
+        } catch (err) {
+          console.error("Error loading testimonials:", err);
+          testimonialGrid.innerHTML = `<p style="color: red; text-align: center; width: 100%;">Error loading testimonials. Please try again later.</p>`;
         }
-
-        renderTestimonials(testimonials);
       }
 
-      // Render testimonials to the DOM
+      // 2. Render Testimonials to DOM
       function renderTestimonials(testimonials) {
         testimonialGrid.innerHTML = "";
+
+        if (testimonials.length === 0) {
+          testimonialGrid.innerHTML = `<p style="color: var(--fg-muted); text-align: center; width: 100%;">No testimonials yet. Be the first!</p>`;
+          return;
+        }
 
         testimonials.forEach((t, index) => {
           const card = document.createElement("div");
           card.className = "testimonial-card";
 
-          // Generate initials for avatar
           const initials = t.name
             .split(" ")
             .map((n) => n[0])
             .join("")
             .toUpperCase();
 
+          // Using t.content to match the DB schema recommended previously
+          const content = t.content || t.message;
+
           card.innerHTML = `
-            <button class="delete-btn" data-id="${t.id}" title="Remove testimonial" aria-label="Delete testimonial">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M18 6L6 18M6 6l12 12"/>
-              </svg>
-            </button>
-            <p class="testimonial-quote">${t.message}</p>
+            <p class="testimonial-quote">${content}</p>
             <div class="testimonial-author">
               <div class="author-avatar">${initials}</div>
               <div class="author-info">
@@ -1983,13 +1975,9 @@
             </div>
           `;
 
-          // Add delete functionality
-          const delBtn = card.querySelector(".delete-btn");
-          delBtn.addEventListener("click", () => deleteTestimonial(t.id));
-
           testimonialGrid.appendChild(card);
 
-          // Trigger intersection observer for animation
+          // Animate in
           setTimeout(
             () => {
               card.classList.add("visible");
@@ -1999,8 +1987,8 @@
         });
       }
 
-      // Add new testimonial
-      testimonialForm.addEventListener("submit", function (e) {
+      // 3. Handle Form Submission
+      testimonialForm.addEventListener("submit", async function (e) {
         e.preventDefault();
 
         const name = document.getElementById("tName").value.trim();
@@ -2009,47 +1997,42 @@
 
         if (!name || !message) return;
 
-        const newTestimonial = {
-          id: "user-" + Date.now(),
-          name,
-          role,
-          message,
-          isDefault: false,
-        };
+        submitBtn.disabled = true;
+        submitBtn.innerText = "Submitting...";
 
-        const storedTestimonials =
-          JSON.parse(localStorage.getItem("ys_testimonials")) || [];
-        storedTestimonials.unshift(newTestimonial); // Add to top
+        try {
+          const { error } = await supabaseClient.from("testimonials").insert([
+            {
+              name,
+              role,
+              content: message,
+              is_approved: false,
+            },
+          ]);
 
-        localStorage.setItem(
-          "ys_testimonials",
-          JSON.stringify(storedTestimonials),
-        );
+          if (error) throw error;
 
-        renderTestimonials(storedTestimonials);
+          // Success
+          successMsg.style.display = "block";
+          testimonialForm.reset();
 
-        // Reset form
-        testimonialForm.reset();
-
-        // Smooth scroll to the new card
-        setTimeout(() => {
-          testimonialGrid.scrollIntoView({
-            behavior: "smooth",
-            block: "start",
-          });
-        }, 100);
+          setTimeout(() => {
+            successMsg.style.display = "none";
+          }, 5000);
+        } catch (err) {
+          console.error(err);
+          alert("Error submitting testimonial. Please check console.");
+        } finally {
+          submitBtn.disabled = false;
+          submitBtn.innerHTML = `Submit Testimonial
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: 8px">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>`;
+        }
       });
 
-      // Delete testimonial
-      function deleteTestimonial(id) {
-        let testimonials = JSON.parse(localStorage.getItem("ys_testimonials"));
-        testimonials = testimonials.filter((t) => t.id !== id);
-        localStorage.setItem("ys_testimonials", JSON.stringify(testimonials));
-        renderTestimonials(testimonials);
-      }
-
-      // Initialize on load
-      initTestimonials();
+      // Initialize Testimonials on Load
+      loadTestimonials();
     </script>
   </body>
 </html>
